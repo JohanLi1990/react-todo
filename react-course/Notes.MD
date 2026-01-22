@@ -45,12 +45,12 @@ npm create vite@latest my-app -- --template react-ts
 
 In your own words:
 
-- Why did logLater see an old value?
+- **Why did logLater see an old value?**
    - Because the the `closure` `loglater` only remebers a snapshot of the count **at that moment**
    - A closure captures values from the render that created it, not a live reference.
 
-- Why doesn’t React “update” closures?
-  - Because JS pwms closure, not react
+- **Why doesn’t React “update” closures?**
+  - Because JS owns closure, not react
   - JS creates closure when doing `App()`
     - Each render = a fresh function invocation
     - Each invocation creates a new closure environment
@@ -71,15 +71,239 @@ In your own words:
 
    React relies on immutable closures to make concurrency safe.
 
-- What does a dependency array actually control?
+- **What does a dependency array actually control?**
   - It controls whether we should re-run the useEffect; if any one from the dep list changes, we re-run;
   - **more precisely, The** dependency array controls when React must discard the old closure and create a new one for the effect.
   - So instead of thinking "should the effect run" , think "is this closure still valid for the current render?"
 
-- Why does the functional updater solve many closure bugs?
+- **Why does the functional updater solve many closure bugs?**
   - The functional updater does not close over state. React calls it later and passes in the latest committed state.
   - That’s why it behaves like:
     - CAS
     - Atomic update
     - reducer logic
 
+# Day 4
+
+## ✍️ End-of-Day 4 questions (answer in your own words)
+
+- **When does useEffect run relative to render**?
+  - useEffect runs after every render
+  - **more precisely** useEffect runs after React commits the render to the DOM, not merely after the render function is called.
+  - React may call render and discard it
+  - Effects only run for committed renders
+
+- **When does cleanup run?**
+  - Cleanup runs before the **next effect** is executed, or when the component unmounts.
+  - A render can happen without an effect re-running
+  - Cleanup is tied to effect re-execution, not render itself
+
+- **What does the dependency array actually mean?**
+  - Dependency array controls, when we should discuss the old closure, and create a new one
+
+- **Why does StrictMode run effects twice in dev?**
+  - In dev mode, react will try to check if the effect run can be successfully cleaned; that is why it run twice to observe the cleanup.
+
+- **Why must effects be idempotent?**
+  - if it is not, the previous closure will have impacts on the current closure
+  - then result becomes unpredictable
+  - in React 18 we have concurrency; if multiple effect runs simultaneously, there will be race conditions.
+  - From ChatGPT words: Effects must be idempotent because React may:
+    - run them more than once (*ticks* example)
+    - interrupt them
+    - clean them up and restart them
+    - retry renders in concurrent mode
+  - If an effect assumes “run exactly once”, it’s broken by design.
+
+## Takeaway / my own conceptual question
+
+### 1️⃣ **What does “React commits changes to the DOM” actually mean?**
+
+  > “Commit” has nothing to do with compiling TypeScript or generating HTML strings.
+  It is a runtime phase where React mutates the browser DOM to match a computed UI tree.
+
+  - Step 0 — **TypeScript / JSX (build time, not runtime)**
+    First, **my code**
+    ```js
+      function App() {
+        return <div>Hello</div>;
+      }
+    ```
+    Then, is compiled (by Vite / Babel / TS) into somethin like:
+    ```js
+    function App() {
+      return React.createElement("div", null, "Hello");
+    }
+    ```
+    That’s it.
+
+    ❌ No HTML generation
+
+    ❌ No DOM touching
+
+    ✅ Just JavaScript functions
+
+    This is build-time, not what we mean by “commit”.
+
+  - Step 1 - **Render phase** (pur computation, no DOM)
+    - At runtime, React does this:
+    ```
+      call App()
+      → returns a tree of React elements (plain JS objects)
+    ```
+    
+    Example (conceptually)
+    ```
+    {
+      type: "div",
+      props: { children: "Hello" }
+    }
+
+    ```
+    - **Important properties of the render phase:**
+      - ✅ Pure computation
+      - ✅ No DOM access
+      - ✅ No side effects
+      - ❌ Nothing visible changes yet
+      - ❌ Browser is not touched
+    - This is where:
+      - React may run your component multiple times
+      - React may abandon work
+      - React may retry
+      - React may pause (React 18)
+    - This phase is interruptible.
+  
+  - Step 2 — **Reconciliation** (still no DOM)
+    - React now compares:
+    ```
+      previous UI tree
+      vs
+      new UI tree
+    ```
+
+    - it calculates:
+      - What node changed
+      - what stayed the same
+      - what must be inserted /updated/removed
+    - This produces a **mutation plan**, no DOM changes yet
+    
+    Still
+
+    ❌ No DOM mutation
+    
+    ❌ No layout
+    
+    ❌ No paint
+     
+  - Step 3 — **Commit phase (THIS is the key)**
+    - Now react enters the commit phase
+    - THis is when Reacrt actually:
+      - calls `document.createElement`
+      - Sets attribute
+      - updates text nodes
+      - Attaches event listeners
+      - Remove nodes
+      - Runs `useLayoutEffect`
+      - Then schedules `useEffect`
+    - **This is the moment the browser DOM is mutated**
+  - Key properties 
+    - ✅ DOM mutations happen
+    - ✅ Effects are scheduled
+    - ❌ Cannot be interrupted
+    - ❌ Must be fast
+    - ❌ Must be consistent
+  - This is why Reacts separates
+    - render (pure, retryable)
+    - commit (imperative, one-shot)
+  
+  When I said:
+
+    > “useEffect runs after React commits the render”
+
+  I meant:
+
+    > After the DOM actually reflects the new UI
+
+    > After the browser has something concrete to show
+
+    > After React knows this render “won”
+
+  This is conceptually similar to
+
+  > database transaction planning
+
+  > write-ahead log
+
+  > then commit changes
+
+  Hence the word commit.
+
+### 2️⃣ JavaScript, threads, and “concurrency” in React 18
+
+- **Is Javacsript single-threaded**
+  
+  **Yes, mostly**
+  ```
+  JavaScript execution (your JS code) runs on one main thread.
+  No shared-memory multithreading
+  No data races like Java threads
+  No locks / volatile / CAS in user JS
+  ```
+
+- **Does Javascript have a GIL like Python?**
+  
+  **No, and this is important**
+
+  Python’s GIL exists because:
+  - Multiple OS threads execute Python bytecode
+  - The GIL serializes them
+
+  JavaScript is different:
+  - There is only one execution thread
+  - No need for a GIL
+  - The event loop controls scheduling
+
+  So JS ≠ Python threading model.
+
+- **Then what does concurrency mean in React 18?**
+  
+  React 18 concurrency = cooperative scheduling
+  ```
+    React render work
+    → pause
+    → browser handles input / paint
+    → resume render
+  ```
+  This is not multithreading
+
+  It is closer to:
+  cooperative multitasking, co-routines, fibers (literally)
+
+- **Why closure must be immutable (connecting back to Day 3)**
+  
+  Because React can:
+  ```
+  Start rendering version A
+  Pause it
+  Start rendering version B
+  Discard A
+  Commit B
+  ```
+
+  If closures were mutable:
+
+  Which render’s closure do you mutate?
+
+  What if render A resumes after B commits?
+
+  **Total chaos**
+
+  So React’s concurrency model depends on immutable snapshots.
+
+  | Java              | React 18            |
+  | ----------------- | ------------------- |
+  | Threads           | Tasks               |
+  | Preemptive        | Cooperative         |
+  | Locks             | Immutable snapshots |
+  | CAS               | Functional updates  |
+  | Memory visibility | Closure snapshots   |

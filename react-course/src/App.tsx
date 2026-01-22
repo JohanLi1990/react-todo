@@ -11,12 +11,12 @@ function App() {
   let local = 0;
   const [count, setCount] = useState(0);
 
-  useEffect(() => {
-    const id = setTimeout(() => {
-      console.log("Effect sees count:", count);
-    }, 1000);
-    return () => clearTimeout(id);
-  }, [count]);
+  // useEffect(() => {
+  //   const id = setTimeout(() => {
+  //     console.log("Effect sees count:", count);
+  //   }, 1000);
+  //   return () => clearTimeout(id);
+  // }, [count]);
 
   const handler = () => {
     setCount(c => c + 1);
@@ -25,9 +25,16 @@ function App() {
     }, 1000);
   };
 
-  // useEffect(() => {
-  //   console.log("new render, sees count:", count);
-  // }, [count]);
+  useEffect(() => {
+    console.log("connecting...");
+    const id = setInterval(() => {
+      console.log("tick");
+    }, 1000);
+    return () =>{
+      console.log("disconnecting...");
+      clearInterval(id);
+    };
+  }, [count]);
 
   // console.log("render", {local, count});
   const updateLocal = () => {
@@ -48,6 +55,7 @@ function App() {
         </a>
       </div>
       <h1>Vite + React</h1>
+      <h2>{"Remaining:" + count}</h2>
       <div className="card">
         {/* <button onClick={logLater}>log logLater</button> */}
         <button onClick={handler}>+</button>
