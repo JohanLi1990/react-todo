@@ -307,3 +307,54 @@ In your own words:
   | Locks             | Immutable snapshots |
   | CAS               | Functional updates  |
   | Memory visibility | Closure snapshots   |
+
+# Day 5
+
+## ✍️ End-of-Day 5 questions (answer these)
+
+- **Why do children re-render when parents render**?
+  
+  Children re-render when parents render because React evaluates the component tree top-down, and invoking a parent component requires invoking its children to compute the UI. Props are only used to skip re-renders when memoization (`React.memo`) is explicitly enabled.
+  
+
+- **Why does a new function cause re-render even if logic is identical**?
+  
+  Because a new function is a new identity; just like if I do `new Foo()` in Java; the logic in `Foo` never changes, but there is a new instance created in heap;
+
+- **What problem do useCallback and useMemo actually solve?**
+  
+  `useCallback` / `useMemo` preserve reference identity across renders so that downstream consumers see the same object/function instead of a new one;
+  They **cache the value**, **return the smae refernce** across renders, **until DEPENDENCIES change**; nothing is wrapped, nothing is proxied, nothing is intercepted. 
+  
+- **When should you not use them?**
+  
+  You should NOT use them when:
+  - e-render cost is trivial
+  - Identity stability is not observed by anyone
+  - You want fresh objects to signal changes
+  - Memoization adds complexity without benefit
+  - A key idea:
+  
+  Re-rendering is not a bug. Unnecessary re-rendering is.
+
+## Summary
+
+By default, when a parent component renders, all its children are re-rendered,
+regardless of whether props changed.
+
+A child only skips re-rendering when React.memo is used AND all props have the
+same reference identity.
+
+New functions and objects cause re-renders because React compares props using
+reference equality (===), not behavior or deep equality.
+
+useCallback and useMemo preserve reference identity across renders by caching
+values until dependencies change; they do not wrap or proxy values.
+
+They should only be used when reference stability is observed by memoized
+children or dependency arrays; otherwise they add unnecessary complexity.
+
+Memoization is like caching:
+- Caching has a lookup cost
+- Caching adds invalidation complexity
+- Caching is only worth it when it avoids something more expensive than itself
