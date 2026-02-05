@@ -7,7 +7,10 @@ export const Child = React.memo(function Child( { onClick, config }: { onClick: 
         <>  
             <h2>Child</h2>
             <button onClick={onClick}>PLUS</button>
-    
+
         </>
     );
 });
+
+
+// Prop
